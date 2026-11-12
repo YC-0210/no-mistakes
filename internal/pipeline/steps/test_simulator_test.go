@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -200,7 +201,13 @@ func TestTestStep_SimulatorExpiryBetweenPreflightAndLaunchStillRunsUnscopedEvide
 		}
 		return &agent.Result{Output: json.RawMessage(`{"findings":[],"summary":"prerequisite expired","tested":["preflight"],"testing_summary":"not executed","artifacts":[],"scenarios":[{"name":"native journey","result":"untested","live":false,"evidence":"","reason":"expired scope"}],"verdict":"inconclusive"}`)}, nil
 	}}
-	sctx := newTestContextWithDBRecords(t, agent.WithSteering(ag, t.TempDir()), dir, base, head, config.Commands{})
+	unused := &mockAgent{name: "unused", runFn: func(context.Context, agent.RunOpts) (*agent.Result, error) {
+		t.Fatal("pre-launch refusal must not dispatch another provider")
+		return nil, nil
+	}}
+	chain := agent.NewFallback([]agent.Agent{agent.WithSteering(ag, t.TempDir()), agent.WithSteering(unused, t.TempDir())}, agent.WithQuotaSwitch(""))
+	sctx := newTestContextWithDBRecords(t, chain, dir, base, head, config.Commands{})
+	sctx.Fixing = true
 	storeSimulatorLease(t, sctx, simulatorLeaseForContext(t, sctx))
 	useSimulatorPreflight(t, func(_ context.Context, l *testsimulator.Lease, _ testsimulator.Binding, _ string) error {
 		l.ExpiresAt = time.Now().Unix() - 1
@@ -209,5 +216,53 @@ func TestTestStep_SimulatorExpiryBetweenPreflightAndLaunchStillRunsUnscopedEvide
 	out, err := (&TestStep{}).Execute(sctx)
 	if err != nil || !out.NeedsApproval || calls != 1 {
 		t.Fatalf("out=%+v err=%v calls=%d", out, err, calls)
+	}
+}
+
+func TestTestStep_SimulatorExpiryAfterQuotaFallbackNeverReplays(t *testing.T) {
+	for _, fixing := range []bool{false, true} {
+		purpose := "test-evidence"
+		if fixing {
+			purpose = "test-fix"
+		}
+		t.Run(purpose, func(t *testing.T) {
+			dir, base, head := setupGitRepo(t)
+			marker := filepath.Join(dir, "provider-side-effect")
+			firstCalls, secondCalls := 0, 0
+			first := &mockAgent{name: "codex", runFn: func(_ context.Context, opts agent.RunOpts) (*agent.Result, error) {
+				firstCalls++
+				if opts.Purpose != purpose || opts.TestSimulatorLease == nil {
+					t.Fatal("first provider did not receive the scoped Test invocation")
+				}
+				if err := os.WriteFile(marker, []byte("executed"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				opts.TestSimulatorLease.ExpiresAt = time.Now().Unix() - 1
+				return nil, errors.New("codex failed: quota exceeded")
+			}}
+			second := &mockAgent{name: "claude", runFn: func(context.Context, agent.RunOpts) (*agent.Result, error) {
+				secondCalls++
+				return &agent.Result{Output: json.RawMessage(passingScenarioFindingsJSON)}, nil
+			}}
+			chain := agent.NewFallback([]agent.Agent{agent.WithSteering(first, t.TempDir()), agent.WithSteering(second, t.TempDir())}, agent.WithQuotaSwitch(""))
+			sctx := newTestContextWithDBRecords(t, chain, dir, base, head, config.Commands{})
+			sctx.Fixing = fixing
+			storeSimulatorLease(t, sctx, simulatorLeaseForContext(t, sctx))
+			probes := 0
+			useSimulatorPreflight(t, func(context.Context, *testsimulator.Lease, testsimulator.Binding, string) error {
+				probes++
+				return nil
+			})
+			out, err := (&TestStep{}).Execute(sctx)
+			if err == nil || errors.Is(err, testsimulator.ErrUnavailable) {
+				t.Fatalf("partially executed invocation became a recoverable refusal: out=%+v err=%v", out, err)
+			}
+			if firstCalls != 1 || secondCalls != 0 || probes != 1 {
+				t.Fatalf("invocation replayed: first=%d second=%d probes=%d", firstCalls, secondCalls, probes)
+			}
+			if data, err := os.ReadFile(marker); err != nil || string(data) != "executed" {
+				t.Fatalf("missing executed-provider side effect: data=%q err=%v", data, err)
+			}
+		})
 	}
 }

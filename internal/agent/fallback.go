@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kunchenguid/no-mistakes/internal/testsimulator"
 	"github.com/kunchenguid/no-mistakes/internal/types"
 )
 
@@ -189,6 +190,12 @@ func (a *fallbackAgent) Run(ctx context.Context, opts RunOpts) (result *Result, 
 		}
 		if !ReportsAgentAttempts(current) {
 			emitAgentAttempt(currentOpts, current.Name(), result, err, startedAt, time.Now())
+		}
+		if errors.Is(err, testsimulator.ErrUnavailable) {
+			if i > 0 {
+				return result, fmt.Errorf("simulator allowance refused after an earlier provider attempt: %v", err)
+			}
+			return result, err
 		}
 		if err == nil {
 			if result != nil && result.Provider == "" {
