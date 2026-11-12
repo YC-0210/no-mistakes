@@ -126,6 +126,7 @@ func (a *opencodeAgent) Name() string { return "opencode" }
 func (a *opencodeAgent) ReportsAgentAttempts() bool { return true }
 
 func (a *opencodeAgent) Run(ctx context.Context, opts RunOpts) (*Result, error) {
+	opts = withSimulatorInvocation(opts)
 	return runWithRetry(ctx, "opencode", opts, claudeMaxRetries, classifyOpencodeTransient, a.recoverTransientRetry, func() (*Result, error) {
 		return a.runOnce(ctx, opts)
 	})
@@ -192,6 +193,9 @@ func (a *opencodeAgent) runOnce(ctx context.Context, opts RunOpts) (*Result, err
 }
 
 func (a *opencodeAgent) runOnceWithFormat(ctx context.Context, opts RunOpts, nativeFormat bool) (*Result, error) {
+	if err := validateSimulatorDispatch(opts); err != nil {
+		return nil, err
+	}
 	// Start server on first invocation (synchronized)
 	baseURL, err := a.ensureServer(ctx, opts.CWD, opts.Env)
 	if err != nil {
@@ -231,6 +235,9 @@ func (a *opencodeAgent) runOnceWithFormat(ctx context.Context, opts RunOpts, nat
 	msgCtx, msgCancel := context.WithCancel(ctx)
 	defer msgCancel()
 	msgCh := make(chan opencodeMessageResult, 1)
+	if err := beginSimulatorDispatch(opts); err != nil {
+		return nil, err
+	}
 	go func() {
 		schema := opts.JSONSchema
 		if !nativeFormat {

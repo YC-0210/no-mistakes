@@ -40,6 +40,7 @@ func (a *antigravityAgent) SupportsSessionProvider(provider string) bool {
 }
 
 func (a *antigravityAgent) Run(ctx context.Context, opts RunOpts) (*Result, error) {
+	opts = withSimulatorInvocation(opts)
 	return runWithRetry(ctx, "antigravity", opts, claudeMaxRetries, classifyTransient, nil, func() (*Result, error) {
 		return a.runOnce(ctx, opts)
 	})
@@ -115,7 +116,7 @@ func (a *antigravityAgent) runOnce(ctx context.Context, opts RunOpts) (*Result, 
 	cmd.Env = a.gitSafeEnv(opts.CWD)
 	shellenv.ConfigureShellCommand(cmd)
 
-	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "antigravity"), opts.RequireCompletedChildren)
+	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "antigravity"), opts.RequireCompletedChildren, opts)
 	if err != nil {
 		return nil, fmt.Errorf("antigravity start: %w", err)
 	}

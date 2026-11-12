@@ -53,6 +53,7 @@ func (a *codexAgent) NeutralizesGateInstructions() bool {
 }
 
 func (a *codexAgent) Run(ctx context.Context, opts RunOpts) (*Result, error) {
+	opts = withSimulatorInvocation(opts)
 	classify := func(err error) (string, bool) {
 		if IsTerminalProviderError(err) {
 			return "", false
@@ -105,7 +106,7 @@ func (a *codexAgent) runOnce(ctx context.Context, opts RunOpts) (*Result, error)
 
 	var stderrBuf []byte
 	var stderrWG sync.WaitGroup
-	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "codex"), opts.RequireCompletedChildren)
+	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "codex"), opts.RequireCompletedChildren, opts)
 	if err != nil {
 		return nil, fmt.Errorf("codex start: %w", err)
 	}

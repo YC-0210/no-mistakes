@@ -121,6 +121,7 @@ func (a *claudeAgent) NeutralizesGateInstructions() bool {
 }
 
 func (a *claudeAgent) Run(ctx context.Context, opts RunOpts) (*Result, error) {
+	opts = withSimulatorInvocation(opts)
 	return runWithRetry(ctx, "claude", opts, claudeMaxRetries, claudeRetryClassifier, nil, func() (*Result, error) {
 		return a.runOnce(ctx, opts)
 	})
@@ -144,7 +145,7 @@ func (a *claudeAgent) runOnce(ctx context.Context, opts RunOpts) (*Result, error
 
 	var stderrBuf []byte
 	var stderrWG sync.WaitGroup
-	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "claude"), opts.RequireCompletedChildren)
+	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "claude"), opts.RequireCompletedChildren, opts)
 	if err != nil {
 		return nil, fmt.Errorf("claude start: %w", err)
 	}

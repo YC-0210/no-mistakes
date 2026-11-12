@@ -27,6 +27,7 @@ func (a *rovodevAgent) Name() string { return "rovodev" }
 func (a *rovodevAgent) ReportsAgentAttempts() bool { return true }
 
 func (a *rovodevAgent) Run(ctx context.Context, opts RunOpts) (*Result, error) {
+	opts = withSimulatorInvocation(opts)
 	return runWithRetry(ctx, "rovodev", opts, claudeMaxRetries, classifyTransient, a.recoverTransientRetry, func() (*Result, error) {
 		return a.runOnce(ctx, opts)
 	})
@@ -68,6 +69,9 @@ func (a *rovodevAgent) runOnce(ctx context.Context, opts RunOpts) (*Result, erro
 	}
 
 	// Send chat message
+	if err := beginSimulatorDispatch(opts); err != nil {
+		return nil, err
+	}
 	if err := a.setChatMessage(ctx, baseURL, sessionID, opts.Prompt); err != nil {
 		return nil, err
 	}

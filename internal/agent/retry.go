@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/kunchenguid/no-mistakes/internal/testsimulator"
 )
 
 // retryClassifier inspects an error and reports whether it should be retried,
@@ -102,6 +104,9 @@ func runWithRetry(
 				return lastResult, &exhaustedTransientRetries{err: err}
 			}
 		}
+		if err := validateSimulatorDispatch(opts); err != nil {
+			return lastResult, err
+		}
 		startedAt := time.Now()
 		result, err := runOnce()
 		completedAt := time.Now()
@@ -111,6 +116,10 @@ func runWithRetry(
 			return result, nil
 		}
 		lastResult = result
+		var refusal *simulatorDispatchError
+		if errors.Is(err, testsimulator.ErrUnavailable) || errors.As(err, &refusal) {
+			return result, err
+		}
 		label, retry := classify(err)
 		if !retry {
 			return result, err

@@ -3,11 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
-	"time"
-
-	"github.com/kunchenguid/no-mistakes/internal/testsimulator"
 )
 
 // WorktreeSteering renders the preamble prepended to every pipeline agent
@@ -71,13 +67,11 @@ type steeredAgent struct {
 // Run prepends the worktree steering preamble before delegating to the
 // wrapped agent. All other RunOpts fields pass through unchanged.
 func (s steeredAgent) Run(ctx context.Context, opts RunOpts) (*Result, error) {
+	opts = withSimulatorInvocation(opts)
 	preamble := s.preamble
 	if l := opts.TestSimulatorLease; l != nil {
-		if opts.Purpose != "test-fix" && opts.Purpose != "test-evidence" {
-			return nil, fmt.Errorf("%w: simulator exception is Test-only", testsimulator.ErrUnavailable)
-		}
-		if err := l.Validate(testsimulator.Binding{RunID: l.RunID, RepoID: l.RepoID, CreatedAt: l.CreatedAt, OwnerUID: os.Getuid(), Now: time.Now()}); err != nil {
-			return nil, fmt.Errorf("%w: %v", testsimulator.ErrUnavailable, err)
+		if err := validateSimulatorDispatch(opts); err != nil {
+			return nil, err
 		}
 		preamble = strings.Replace(preamble, "- Confine source", "- Except for the explicit per-run simulator exception below, confine source", 1)
 		preamble = strings.Replace(preamble, "- Do not modify system state", "- Outside that explicit simulator exception, do not modify system state", 1)

@@ -121,6 +121,7 @@ func (a *fallbackAgent) Run(ctx context.Context, opts RunOpts) (result *Result, 
 	if a.reviewerQuotaOnly && a.exhausted.Load() {
 		return nil, fmt.Errorf("all explicitly configured reviewers exhausted their quota")
 	}
+	opts = withSimulatorInvocation(opts)
 	var schemaErr error
 	defer func() {
 		if err != nil && schemaErr != nil && !errors.Is(err, schemaErr) {
@@ -193,8 +194,12 @@ func (a *fallbackAgent) Run(ctx context.Context, opts RunOpts) (result *Result, 
 		}
 		if errors.Is(err, testsimulator.ErrUnavailable) {
 			if i > 0 {
-				return result, fmt.Errorf("simulator allowance refused after an earlier provider attempt: %v", err)
+				return result, &simulatorDispatchError{err: err}
 			}
+			return result, err
+		}
+		var refusal *simulatorDispatchError
+		if errors.As(err, &refusal) {
 			return result, err
 		}
 		if err == nil {

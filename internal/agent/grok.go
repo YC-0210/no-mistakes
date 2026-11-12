@@ -56,6 +56,7 @@ func (a *grokAgent) NeutralizesGateInstructions() bool {
 }
 
 func (a *grokAgent) Run(ctx context.Context, opts RunOpts) (*Result, error) {
+	opts = withSimulatorInvocation(opts)
 	return runWithRetry(ctx, "grok", opts, claudeMaxRetries, classifyTransient, nil, func() (*Result, error) {
 		return a.runOnce(ctx, opts)
 	})
@@ -103,7 +104,7 @@ func (a *grokAgent) runOnce(ctx context.Context, opts RunOpts) (*Result, error) 
 
 	var stderrBuf []byte
 	var stderrWG sync.WaitGroup
-	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "grok"), opts.RequireCompletedChildren)
+	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "grok"), opts.RequireCompletedChildren, opts)
 	if err != nil {
 		return nil, fmt.Errorf("grok start: %w", err)
 	}

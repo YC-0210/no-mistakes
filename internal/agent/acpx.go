@@ -52,6 +52,7 @@ func (a *acpxAgent) NeutralizesGateInstructions() bool {
 }
 
 func (a *acpxAgent) Run(ctx context.Context, opts RunOpts) (*Result, error) {
+	opts = withSimulatorInvocation(opts)
 	return runWithRetry(ctx, a.Name(), opts, claudeMaxRetries, classifyTransient, nil, func() (*Result, error) {
 		return a.runOnce(ctx, opts)
 	})
@@ -76,7 +77,7 @@ func (a *acpxAgent) runOnce(ctx context.Context, opts RunOpts) (*Result, error) 
 	if err != nil {
 		return nil, fmt.Errorf("acpx stdin pipe: %w", err)
 	}
-	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, a.Name()), opts.RequireCompletedChildren)
+	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, a.Name()), opts.RequireCompletedChildren, opts)
 	if err != nil {
 		_ = stdin.Close()
 		return nil, fmt.Errorf("acpx start: %w", err)

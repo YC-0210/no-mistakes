@@ -79,7 +79,7 @@ func (p *nativeAgentPipe) markDone() {
 // activity, when non-nil, is invoked on every non-empty read from either pipe;
 // see LifecyclePhaseActivity for why subprocess byte liveness - not assistant
 // prose - is the signal that distinguishes a working agent from a wedged one.
-func startNativeAgentCommand(cmd *exec.Cmd, activity func(), requireCompletedChildren bool) (*nativeAgentCommand, error) {
+func startNativeAgentCommand(cmd *exec.Cmd, activity func(), requireCompletedChildren bool, opts RunOpts) (*nativeAgentCommand, error) {
 	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
 		return nil, fmt.Errorf("stdout pipe: %w", err)
@@ -94,7 +94,11 @@ func startNativeAgentCommand(cmd *exec.Cmd, activity func(), requireCompletedChi
 	cmd.Stdout = stdoutW
 	cmd.Stderr = stderrW
 	oomBase, oomOK := shellenv.OOMKillBaseline()
-	if err := shellenv.StartShellCommand(cmd); err != nil {
+	err = beginSimulatorDispatch(opts)
+	if err == nil {
+		err = shellenv.StartShellCommand(cmd)
+	}
+	if err != nil {
 		_ = stdoutR.Close()
 		_ = stdoutW.Close()
 		_ = stderrR.Close()

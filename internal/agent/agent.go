@@ -36,6 +36,7 @@ type Agent interface {
 
 // RunOpts configures a single agent invocation.
 type RunOpts struct {
+	simulatorInvocation *simulatorInvocation
 	// TestSimulatorLease is supplied only by the Test step after native preflight.
 	// It changes prompt steering, never provider permissions or OS confinement.
 	TestSimulatorLease *testsimulator.Lease

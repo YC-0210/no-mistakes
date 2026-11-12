@@ -50,6 +50,7 @@ func (a *piAgent) NeutralizesGateInstructions() bool {
 }
 
 func (a *piAgent) Run(ctx context.Context, opts RunOpts) (*Result, error) {
+	opts = withSimulatorInvocation(opts)
 	return runWithRetry(ctx, "pi", opts, claudeMaxRetries, classifyTransient, nil, func() (*Result, error) {
 		return a.runStructured(ctx, opts)
 	})
@@ -83,7 +84,7 @@ func (a *piAgent) runOnce(ctx context.Context, opts RunOpts, strict bool) (*Resu
 		return nil, fmt.Errorf("pi stdin pipe: %w", err)
 	}
 
-	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "pi"), opts.RequireCompletedChildren)
+	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "pi"), opts.RequireCompletedChildren, opts)
 	if err != nil {
 		_ = stdin.Close()
 		return nil, fmt.Errorf("pi start: %w", err)

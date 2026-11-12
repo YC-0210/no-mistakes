@@ -28,6 +28,7 @@ func (a *copilotAgent) Name() string { return "copilot" }
 func (a *copilotAgent) ReportsAgentAttempts() bool { return true }
 
 func (a *copilotAgent) Run(ctx context.Context, opts RunOpts) (*Result, error) {
+	opts = withSimulatorInvocation(opts)
 	return runWithRetry(ctx, "copilot", opts, claudeMaxRetries, classifyTransient, nil, func() (*Result, error) {
 		return a.runOnce(ctx, opts)
 	})
@@ -46,7 +47,7 @@ func (a *copilotAgent) runOnce(ctx context.Context, opts RunOpts) (*Result, erro
 
 	var stderrBuf []byte
 	var stderrWG sync.WaitGroup
-	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "copilot"), opts.RequireCompletedChildren)
+	started, err := startNativeAgentCommand(cmd, nativeAgentActivityObserver(opts, "copilot"), opts.RequireCompletedChildren, opts)
 	if err != nil {
 		return nil, fmt.Errorf("copilot start: %w", err)
 	}

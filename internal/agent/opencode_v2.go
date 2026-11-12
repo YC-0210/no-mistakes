@@ -98,6 +98,9 @@ func (a *opencodeAgent) runV2(ctx context.Context, opts RunOpts, baseURL string)
 		// Keep tools available, instruct the model, then validate its final text.
 		prompt = buildOpencodePrompt(prompt, opts.JSONSchema)
 	}
+	if err := beginSimulatorDispatch(opts); err != nil {
+		return nil, err
+	}
 	err = client.json(ctx, http.MethodPost, sessionURL+"/prompt", map[string]string{"text": prompt}, nil)
 	if err != nil {
 		stopStream()
