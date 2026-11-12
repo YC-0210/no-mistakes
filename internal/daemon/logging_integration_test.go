@@ -41,7 +41,9 @@ func TestDetachedDaemonUsesBoundedDedicatedLogSinks(t *testing.T) {
 	t.Setenv("SHELL", shellShim)
 	t.Setenv("NM_TEST_START_DAEMON", "1")
 	t.Setenv("NM_DAEMON_HELPER_PROCESS", "daemon")
-	t.Setenv("NM_TEST_DAEMON_START_TIMEOUT", "10s")
+	// This tests log routing/retention, not a shortened startup SLA. Use the
+	// existing production readiness budget, including its Unix shell allowances.
+	t.Setenv("NM_TEST_DAEMON_START_TIMEOUT", "")
 	t.Setenv("NM_TEST_DAEMON_START_POLL_INTERVAL", "10ms")
 
 	if err := startDetachedDaemon(p); err != nil {

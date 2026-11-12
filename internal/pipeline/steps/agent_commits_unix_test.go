@@ -15,14 +15,14 @@ import (
 // script answers git's `ssh -G` variant probe, records that it was reached, then
 // never speaks again.
 func TestCIStep_CommitRepair_StalledTransportHelperFailsClosedWithinItsDeadline(t *testing.T) {
-	original := publishedHeadResolveWindow
-	publishedHeadResolveWindow = time.Second
-	t.Cleanup(func() { publishedHeadResolveWindow = original })
+	// Exercise the production remote-read bound. A one-second override can
+	// expire during Git's setup under suite load, before the transport is reached.
+	window := publishedHeadResolveWindow
 
 	tmp := t.TempDir()
 	reached := filepath.Join(tmp, "reached")
 	helper := filepath.Join(tmp, "stalled-ssh.sh")
-	script := "#!/bin/sh\n[ \"$1\" = -G ] && exit 0\n: > '" + reached + "'\nexec sleep 30\n"
+	script := "#!/bin/sh\n[ \"$1\" = -G ] && exit 0\n: > '" + reached + "'\nexec sleep 120\n"
 	if err := os.WriteFile(helper, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestCIStep_CommitRepair_StalledTransportHelperFailsClosedWithinItsDeadline(
 	var err error
 	select {
 	case err = <-done:
-	case <-time.After(15 * time.Second):
+	case <-time.After(window + 15*time.Second):
 		t.Fatal("commitRepair is still blocked on the transport helper, the deadline did not end it")
 	}
 
