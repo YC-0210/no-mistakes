@@ -234,6 +234,64 @@ The [finding-action model](/no-mistakes/concepts/auto-fix/#finding-actions) owns
 
 **Default auto-fix limit:** `3`.
 
+### Explicit native simulator lease
+
+An operator can supply one newly provisioned default-registry iOS simulator to an existing run with `axi respond --step test --action fix --findings <ids> --test-simulator-lease-file <receipt.json>`.
+This is an explicit per-run resource allowance, separate from driver `--instructions` and repository runbooks.
+It is not available through repository config, inherited by another run, or inferred from a device name or evidence artifact.
+Normal finding accounting still applies.
+
+Provision the device separately under the operator's own authorization, retaining the successful creation output and the inventory proving that returned UDID was absent before creation.
+The device must be named `no-mistakes-<run-id>` and created no earlier than that run.
+The lease does not itself create a simulator or authorize another creation.
+Only `/Applications/Xcode.app/Contents/Developer/usr/bin/simctl` is supported, with the paired `xcodebuild` in that directory and their exact SHA256 hashes.
+A different installation or runner needs a separately supported contract rather than an arbitrary executable override.
+
+The JSON object has these required fields:
+
+| Field | Meaning |
+| --- | --- |
+| `version` | `1` |
+| `run_id`, `repo_id` | Exact durable run and repository IDs |
+| `owner_uid` | Unix UID of the operator running the daemon |
+| `controller` | The absolute Apple `simctl` path above |
+| `controller_sha256`, `xcodebuild_sha256` | Lowercase 64-character SHA256 tool hashes |
+| `registry` | `default`; custom device sets are not covered |
+| `runtime` | Explicit `com.apple.CoreSimulator.SimRuntime.iOS-<version>` identifier |
+| `device_type` | Explicit `com.apple.CoreSimulator.SimDeviceType.<type>` identifier |
+| `udid` | Uppercase device UUID returned by the new create operation |
+| `name` | `no-mistakes-<run-id>` |
+| `created_at` | Creation time in Unix seconds, no earlier than the run and not in the future |
+| `expires_at` | Future Unix seconds, at most 24 hours from acceptance/execution |
+| `project` | Relative `.xcodeproj` or `.xcworkspace` path inside the run worktree; escaping symlinks are refused |
+| `scheme` | The original app scheme to use for destination discovery |
+| `creation` | Object containing matching `udid`, `absent_before: true` and `exit_code: 0` |
+
+The creation fields are the operator's attestation backed by their retained receipt, not cryptographic proof of the creation process.
+The daemon validates run/repository/UID, freshness, expiry, format and ownership binding before releasing the Test gate.
+The receipt is stored privately on the run and reloaded during normal execution and recovery, never published as test evidence or exposed in public run JSON.
+An explicit later Test-fix response may renew the expiry for the same resource; it cannot replace the target, controller, runtime, project or other bound identity.
+An older daemon cannot silently ignore the new permission: the client probes support before submitting the response and refuses if compatible adoption has not been established.
+Adoption and service lifecycle changes remain the operator's responsibility, with existing run/custody protections intact.
+
+Before both the repair and evidence turn, bounded read-only preflight checks the exact tool hashes, the UDID/name/type/runtime in the operator's default registry, and that UDID in actual available Xcode destination rows for the project/scheme.
+A command echo, exit-0 listing, successful boot, `SIMULATOR_DEVICE_SET_PATH` or unsupported custom-set flag is not proof of that destination.
+The read-only native children discard custom device-set and developer-directory overrides without changing the daemon or global environment.
+Preflight never boots, installs or launches an app.
+Schema-correction turns remain tool-free and do not repeat preflight or acquire a simulator allowance.
+
+After successful preflight, the preceding workspace steering explicitly permits bounded boot/bootstatus, source-bound app/runner installation/launch and the intended synthetic native journeys on only that exact UDID.
+Ordinary source/project writes stay inside the worktree.
+This is prompt guidance, not executable confinement, an OS capability grant or a provider-sandbox override.
+It grants no further creation, reset, erase, deletion, shutdown, cleanup, foreign/existing device operation, real account traffic, personal-phone operation, global service/config/cache/security change or broad home/disk access.
+
+Missing, malformed, expired, foreign or unavailable scope cannot activate the exception.
+When a pinned lease's preflight fails, the code-repair turn is not dispatched; the evidence turn still runs to record the missing proof and the step parks with `test-native-prerequisite` as an `ask-user` warning.
+A missing prerequisite forces an inconclusive verdict unless a scenario actually executed and failed, which remains `no-go`.
+It cannot produce a successful Test or infer a code defect from the unavailable environment alone.
+Unexecuted scenarios remain `untested` and `live: false`; all ordinary scenario-schema checks still apply.
+Boot readiness, app installation/launch, accepted native journeys and successful pipeline completion each require their own evidence.
+
 ## Document
 
 Updates matching documentation for code changes and reports only unresolved gaps.

@@ -30,6 +30,7 @@ import (
 	"github.com/kunchenguid/no-mistakes/internal/pipeline/steps"
 	"github.com/kunchenguid/no-mistakes/internal/runenv"
 	"github.com/kunchenguid/no-mistakes/internal/telemetry"
+	"github.com/kunchenguid/no-mistakes/internal/testsimulator"
 	"github.com/kunchenguid/no-mistakes/internal/types"
 	"github.com/kunchenguid/no-mistakes/internal/verificationplan"
 	"github.com/spf13/cobra"
@@ -1439,11 +1440,16 @@ func getRunInfo(ctx context.Context, socketPath, runID string) (*ipc.RunInfo, er
 	return (&ipcRunStateSource{socketPath: socketPath}).Reconcile(ctx, runID)
 }
 
+type respondOptions struct {
+	coverage  *ipc.CoverageBinding
+	simulator *testsimulator.Lease
+}
+
 // sendRespond issues an approval action to the daemon for a step and returns
 // what it recorded. A response the daemon refused is returned as a
 // *respondRefusalError - the gate is still parked and the response can be
 // corrected.
-func sendRespond(client *ipc.Client, runID string, step types.StepName, action types.ApprovalAction, findingIDs, ignoreFindingIDs []string, instructions map[string]string, added []types.Finding, approvalReason string, origin types.ResponseOrigin, coverage ...*ipc.CoverageBinding) (ipc.RespondResult, error) {
+func sendRespond(client *ipc.Client, runID string, step types.StepName, action types.ApprovalAction, findingIDs, ignoreFindingIDs []string, instructions map[string]string, added []types.Finding, approvalReason string, origin types.ResponseOrigin, options ...respondOptions) (ipc.RespondResult, error) {
 	params := &ipc.RespondParams{
 		Origin:           origin,
 		RunID:            runID,
@@ -1458,8 +1464,9 @@ func sendRespond(client *ipc.Client, runID string, step types.StepName, action t
 		AddedFindings:          added,
 		ApprovalReason:         approvalReason,
 	}
-	if len(coverage) == 1 {
-		params.Coverage = coverage[0]
+	if len(options) == 1 {
+		params.Coverage = options[0].coverage
+		params.TestSimulatorLease = options[0].simulator
 	}
 	var result ipc.RespondResult
 	if err := client.Call(ipc.MethodRespond, params, &result); err != nil {
@@ -1718,6 +1725,7 @@ func newAxiRespondCmd() *cobra.Command {
 	var autoYes bool
 	var wait time.Duration
 
+	var simulatorLeaseFile string
 	cmd := &cobra.Command{
 		Use:   "respond",
 		Short: "Answer the current approval gate and continue the run",
@@ -1743,6 +1751,10 @@ func newAxiRespondCmd() *cobra.Command {
 			"the structured branch_sync next_action in the output. Unlike `axi abort`,\n" +
 			"which cancels whatever the run is doing, this records a rejection at one\n" +
 			"gate and is refused unless the run is parked there.\n\n" +
+			"A separately authorized new-owned native target can be supplied with\n" +
+			"--test-simulator-lease-file on a Test fix response. It is a per-run resource\n" +
+			"receipt, not driver guidance or a simulator-creation/security grant. The\n" +
+			"client refuses an unsupported daemon before sending the response.\n\n" +
 			"Warning: inline text is expanded by your shell; backticks can execute commands\n" +
 			"and silently replace content. Use --instructions-file or --add-finding-file\n" +
 			"for text containing backticks, quotes, or newlines. Use --instructions - or --add-finding - to read\n" +
@@ -1761,19 +1773,20 @@ func newAxiRespondCmd() *cobra.Command {
 				"auto_yes": autoYes,
 			}, func() error {
 				return runAxiRespond(cmd, respondArgs{
-					action:           action,
-					step:             step,
-					findings:         findings,
-					ignore:           ignore,
-					instructions:     instructions,
-					instructionsFile: instructionsFile,
-					addFinding:       addFinding,
-					addFindingFile:   addFindingFile,
-					reason:           reason,
-					autoYes:          autoYes,
-					wait:             wait,
-					runID:            strings.TrimSpace(runID),
-					runFlagSet:       cmd.Flags().Changed("run"),
+					action:                 action,
+					step:                   step,
+					findings:               findings,
+					ignore:                 ignore,
+					instructions:           instructions,
+					instructionsFile:       instructionsFile,
+					testSimulatorLeaseFile: simulatorLeaseFile,
+					addFinding:             addFinding,
+					addFindingFile:         addFindingFile,
+					reason:                 reason,
+					autoYes:                autoYes,
+					wait:                   wait,
+					runID:                  strings.TrimSpace(runID),
+					runFlagSet:             cmd.Flags().Changed("run"),
 				})
 			})
 		},
@@ -1784,6 +1797,7 @@ func newAxiRespondCmd() *cobra.Command {
 	cmd.Flags().StringVar(&findings, "findings", "", "comma-separated finding IDs to fix (with --action fix)")
 	cmd.Flags().StringVar(&ignore, "ignore", "", "comma-separated finding IDs to decline (with --action fix); every finding the gate shows must be in --findings or --ignore unless an earlier round of this step already decided it, and a finding that round chose to fix cannot be declined")
 	cmd.Flags().StringVar(&instructions, "instructions", "", "guidance applied to selected findings; '-' reads stdin (exclusive with --instructions-file)")
+	cmd.Flags().StringVar(&simulatorLeaseFile, "test-simulator-lease-file", "", "operator-issued JSON receipt for one newly owned default-registry simulator (Test fix only; requires compatible daemon)")
 	cmd.Flags().StringVar(&instructionsFile, "instructions-file", "", "read fix guidance from a file (exclusive with --instructions)")
 	cmd.Flags().StringVar(&reason, "reason", "", "reason preserved with a Test approval exception (--step test --action approve), and required with --action abort")
 	cmd.Flags().StringVar(&addFinding, "add-finding", "", "JSON finding object to add and fix; '-' reads stdin (exclusive with --add-finding-file)")
@@ -1794,19 +1808,20 @@ func newAxiRespondCmd() *cobra.Command {
 }
 
 type respondArgs struct {
-	action           string
-	step             string
-	findings         string
-	ignore           string
-	instructions     string
-	instructionsFile string
-	addFinding       string
-	addFindingFile   string
-	reason           string
-	autoYes          bool
-	wait             time.Duration
-	runID            string
-	runFlagSet       bool
+	testSimulatorLeaseFile string
+	action                 string
+	step                   string
+	findings               string
+	ignore                 string
+	instructions           string
+	instructionsFile       string
+	addFinding             string
+	addFindingFile         string
+	reason                 string
+	autoYes                bool
+	wait                   time.Duration
+	runID                  string
+	runFlagSet             bool
 }
 
 func runAxiRespond(cmd *cobra.Command, ra respondArgs) error {
@@ -1862,6 +1877,16 @@ func runAxiRespond(cmd *cobra.Command, ra respondArgs) error {
 		return emitError(cmd, 2, "--instructions-file and --add-finding-file apply only to --action fix")
 	}
 
+	var simulatorLease *testsimulator.Lease
+	if cmd.Flags().Changed("test-simulator-lease-file") {
+		if act != types.ActionFix {
+			return emitError(cmd, 2, "--test-simulator-lease-file applies only to a Test fix response")
+		}
+		simulatorLease, err = testsimulator.ReadFile(ra.testSimulatorLeaseFile)
+		if err != nil {
+			return emitError(cmd, 2, err.Error())
+		}
+	}
 	var env *axiEnv
 	runID := ra.runID
 	if runID != "" {
@@ -1931,6 +1956,21 @@ func runAxiRespond(cmd *cobra.Command, ra respondArgs) error {
 		stepName = types.StepName(gate.Name)
 	}
 
+	if simulatorLease != nil {
+		if stepName != types.StepTest || simulatorLease.RunID != runID {
+			return emitError(cmd, 2, "simulator lease must name this exact Test run")
+		}
+		var supported struct {
+			Version int `json:"version"`
+		}
+		probeErr := env.client.CallWithContext(driveCtx, ipc.MethodProbeTestSimulatorLease, nil, &supported, 0)
+		if isAxiWaitElapsed(ctx, driveCtx, probeErr) {
+			return emitAxiWaitElapsedForRun(cmd, ra.wait, ra.runID, respondCmd+" --action fix")
+		}
+		if probeErr != nil || supported.Version != testsimulator.Version {
+			return emitError(cmd, 1, "running daemon does not support explicit simulator leases; no response sent", "Arrange verified compatible scoped adoption with the original run owner; do not silently replace or restart its daemon")
+		}
+	}
 	reason := ra.reason
 	if act == types.ActionAbort {
 		reason = strings.TrimSpace(reason)
@@ -1987,7 +2027,7 @@ func runAxiRespond(cmd *cobra.Command, ra respondArgs) error {
 			return emitError(cmd, 1, "daemon did not provide a bound review round for coverage continuation")
 		}
 	}
-	result, err := sendRespond(env.client, runID, stepName, act, findingIDs, ignoreIDs, instructions, added, reason, types.ResponseOriginInteractive, coverage)
+	result, err := sendRespond(env.client, runID, stepName, act, findingIDs, ignoreIDs, instructions, added, reason, types.ResponseOriginInteractive, respondOptions{coverage: coverage, simulator: simulatorLease})
 	if err != nil {
 		var refusal *respondRefusalError
 		if errors.As(err, &refusal) {

@@ -17,6 +17,7 @@ import (
 
 	"github.com/kunchenguid/no-mistakes/internal/agentcfg"
 	"github.com/kunchenguid/no-mistakes/internal/runenv"
+	"github.com/kunchenguid/no-mistakes/internal/testsimulator"
 	"github.com/kunchenguid/no-mistakes/internal/types"
 )
 
@@ -35,7 +36,10 @@ type Agent interface {
 
 // RunOpts configures a single agent invocation.
 type RunOpts struct {
-	Prompt string
+	// TestSimulatorLease is supplied only by the Test step after native preflight.
+	// It changes prompt steering, never provider permissions or OS confinement.
+	TestSimulatorLease *testsimulator.Lease
+	Prompt             string
 	// RequireCompletedChildren refuses a successful native agent exit if its
 	// owned process group or job still has children after the bounded settle
 	// window, or completion cannot be verified.

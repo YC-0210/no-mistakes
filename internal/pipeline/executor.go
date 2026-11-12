@@ -26,6 +26,7 @@ import (
 	"github.com/kunchenguid/no-mistakes/internal/reviewqa"
 	"github.com/kunchenguid/no-mistakes/internal/safeurl"
 	"github.com/kunchenguid/no-mistakes/internal/telemetry"
+	"github.com/kunchenguid/no-mistakes/internal/testsimulator"
 	"github.com/kunchenguid/no-mistakes/internal/types"
 )
 
@@ -289,12 +290,13 @@ func (e *Executor) Respond(step types.StepName, action types.ApprovalAction, fin
 	return err
 }
 
-// ResponseOptions carries caller-supplied audit metadata and the optional
-// complete-coverage binding. An omitted origin is unknown, including direct
+// ResponseOptions carries caller-supplied audit metadata, an optional
+// complete-coverage binding and an explicit operator simulator receipt. An omitted origin is unknown, including direct
 // executor responses that did not come from an IPC client.
 type ResponseOptions struct {
-	Origin   types.ResponseOrigin
-	Coverage *ipc.CoverageBinding
+	TestSimulatorLease *testsimulator.Lease
+	Origin             types.ResponseOrigin
+	Coverage           *ipc.CoverageBinding
 }
 
 // RespondWithOverrides is like Respond but also carries explicit declines,
@@ -348,6 +350,11 @@ func (e *Executor) RespondWithOverrides(step types.StepName, action types.Approv
 	if step != e.waitingStep {
 		e.mu.Unlock()
 		return RespondDispositions{}, fmt.Errorf("step mismatch: responding to %q but %q is awaiting approval", step, e.waitingStep)
+	}
+	persistSimulatorLease, err := e.prepareTestSimulatorLease(step, action, option.TestSimulatorLease)
+	if err != nil {
+		e.mu.Unlock()
+		return RespondDispositions{}, err
 	}
 	var coverageRound *db.StepRound
 	if action == types.ActionCompleteCoverage {
@@ -473,6 +480,12 @@ func (e *Executor) RespondWithOverrides(step types.StepName, action types.Approv
 	}
 	if action != types.ActionFix && e.db != nil && e.waitingStepResultID != "" {
 		if err := e.db.SetStepResponseOrigin(e.waitingStepResultID, option.Origin); err != nil {
+			e.mu.Unlock()
+			return RespondDispositions{}, err
+		}
+	}
+	if persistSimulatorLease != nil {
+		if err := persistSimulatorLease(); err != nil {
 			e.mu.Unlock()
 			return RespondDispositions{}, err
 		}

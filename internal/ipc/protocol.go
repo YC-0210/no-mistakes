@@ -7,6 +7,7 @@ import (
 	"github.com/kunchenguid/no-mistakes/internal/agentcfg"
 	"github.com/kunchenguid/no-mistakes/internal/git"
 	"github.com/kunchenguid/no-mistakes/internal/runenv"
+	"github.com/kunchenguid/no-mistakes/internal/testsimulator"
 	"github.com/kunchenguid/no-mistakes/internal/types"
 	"github.com/kunchenguid/no-mistakes/internal/verificationplan"
 )
@@ -36,6 +37,7 @@ const (
 	MethodRetryRun                  = "retry_run"
 	MethodSubscribe                 = "subscribe"
 	MethodRespond                   = "respond"
+	MethodProbeTestSimulatorLease   = "probe_test_simulator_lease"
 	MethodAnswerReview              = "answer_review_question"
 	MethodCancelRun                 = "cancel_run"
 	MethodHandoffRun                = "handoff_run"
@@ -336,14 +338,16 @@ type SubscribeParams struct {
 // already decided it, and the daemon refuses the response (leaving the gate
 // parked) when one is left out. An omission is never a decline.
 type RespondParams struct {
-	Origin           types.ResponseOrigin `json:"origin,omitempty"`
-	Coverage         *CoverageBinding     `json:"coverage,omitempty"`
-	RunID            string               `json:"run_id"`
-	Step             types.StepName       `json:"step"`
-	Action           types.ApprovalAction `json:"action"`
-	FindingIDs       []string             `json:"finding_ids,omitempty"`
-	IgnoreFindingIDs []string             `json:"ignore_finding_ids,omitempty"`
-	Instructions     map[string]string    `json:"instructions,omitempty"`
+	// TestSimulatorLease is explicit operator scope, not per-finding driver prose.
+	TestSimulatorLease *testsimulator.Lease `json:"test_simulator_lease,omitempty"`
+	Origin             types.ResponseOrigin `json:"origin,omitempty"`
+	Coverage           *CoverageBinding     `json:"coverage,omitempty"`
+	RunID              string               `json:"run_id"`
+	Step               types.StepName       `json:"step"`
+	Action             types.ApprovalAction `json:"action"`
+	FindingIDs         []string             `json:"finding_ids,omitempty"`
+	IgnoreFindingIDs   []string             `json:"ignore_finding_ids,omitempty"`
+	Instructions       map[string]string    `json:"instructions,omitempty"`
 	// InstructionsFromDriver marks Instructions as an agent driver's fix
 	// guidance rather than the user's own words.
 	InstructionsFromDriver bool            `json:"instructions_from_driver,omitempty"`

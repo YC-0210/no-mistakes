@@ -18,11 +18,13 @@ import (
 
 // Run represents a pipeline run.
 type Run struct {
-	ID      string
-	RepoID  string
-	Branch  string
-	HeadSHA string
-	BaseSHA string
+	// TestSimulatorLease is an operator-issued per-run receipt, never repo config.
+	TestSimulatorLease *string `json:"-"`
+	ID                 string
+	RepoID             string
+	Branch             string
+	HeadSHA            string
+	BaseSHA            string
 	// WorktreeDir is the directory this run's worktree was created in, resolved
 	// once at run creation from the operator's configured placement (see
 	// internal/worktrees). Every consumer of an existing run's worktree reads
@@ -140,7 +142,7 @@ type Run struct {
 	UpdatedAt       int64
 }
 
-const runColumns = `id, repo_id, branch, head_sha, base_sha, worktree_dir, submitted_head_sha, no_mistakes_version, no_mistakes_build_sha, review_approved_head_sha, status, pr_url, pr_state, pr_state_observed_at, ci_ready_at, ci_ready_no_ci, ci_released_at, last_pushed_sha, push_target_kind, push_target_fingerprint, push_ref, last_pushed_at, push_generation, push_active, terminal_head_verified_at, custody_returned_at, error, awaiting_agent_since, parked_ms, intent, intent_source, intent_session_id, intent_score, intent_check_json, launch_nonce, launch_validation_generation, launch_intent_digest, launch_receipt_claimed_at, pr_base_branch, omit_intent, pi_profile, quota_routing, verification_plan, closing_issue_refs, closing_issue_refs_locked_at, pr_title, pr_body, pr_title_fresh, pr_body_fresh, pr_text_applied_at, evidence_dir, transcript_homes, created_at, updated_at, reviewer_profile`
+const runColumns = `id, repo_id, branch, head_sha, base_sha, worktree_dir, submitted_head_sha, no_mistakes_version, no_mistakes_build_sha, review_approved_head_sha, status, pr_url, pr_state, pr_state_observed_at, ci_ready_at, ci_ready_no_ci, ci_released_at, last_pushed_sha, push_target_kind, push_target_fingerprint, push_ref, last_pushed_at, push_generation, push_active, terminal_head_verified_at, custody_returned_at, error, awaiting_agent_since, parked_ms, intent, intent_source, intent_session_id, intent_score, intent_check_json, launch_nonce, launch_validation_generation, launch_intent_digest, launch_receipt_claimed_at, pr_base_branch, omit_intent, pi_profile, quota_routing, verification_plan, closing_issue_refs, closing_issue_refs_locked_at, pr_title, pr_body, pr_title_fresh, pr_body_fresh, pr_text_applied_at, evidence_dir, transcript_homes, created_at, updated_at, reviewer_profile, test_simulator_lease`
 
 func (d *DB) runColumns() (string, error) {
 	return d.readProjection("runs", runColumns, runScanTargets(&Run{}, &sql.NullString{})...)
@@ -159,7 +161,7 @@ func runScanTargets(r *Run, storedClosingIssues *sql.NullString) []any {
 		storedClosingIssues, &r.ClosingIssueRefsLockedAt,
 		&r.PRTitle, &r.PRBody, &r.PRTitleFresh, &r.PRBodyFresh, &r.PRTextAppliedAt, &r.EvidenceDir, &r.TranscriptHomes,
 		&r.CreatedAt, &r.UpdatedAt,
-		&r.ReviewerProfile,
+		&r.ReviewerProfile, &r.TestSimulatorLease,
 	}
 }
 

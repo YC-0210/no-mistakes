@@ -1552,6 +1552,13 @@ func registerHandlers(srv *ipc.Server, mgr *RunManager, d *db.DB, shutdown func(
 		return &ipc.PushReceivedResult{RunID: runID}, nil
 	})
 
+	// A new client probes before sending the mutating response, so an older
+	// daemon cannot silently ignore the receipt and dispatch an unscoped fix.
+	srv.Handle(ipc.MethodProbeTestSimulatorLease, func(context.Context, json.RawMessage) (interface{}, error) {
+		return struct {
+			Version int `json:"version"`
+		}{Version: 1}, nil
+	})
 	srv.Handle(ipc.MethodRespond, func(ctx context.Context, params json.RawMessage) (interface{}, error) {
 		if err := refuseNested(ctx, false); err != nil {
 			return nil, err
@@ -1560,7 +1567,7 @@ func registerHandlers(srv *ipc.Server, mgr *RunManager, d *db.DB, shutdown func(
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, fmt.Errorf("invalid params: %w", err)
 		}
-		dispositions, err := mgr.HandleRespondWithOverrides(p.RunID, p.Step, p.Action, p.FindingIDs, p.IgnoreFindingIDs, respondInstructions(p), p.AddedFindings, p.ApprovalReason, pipeline.ResponseOptions{Origin: p.Origin, Coverage: p.Coverage})
+		dispositions, err := mgr.HandleRespondWithOverrides(p.RunID, p.Step, p.Action, p.FindingIDs, p.IgnoreFindingIDs, respondInstructions(p), p.AddedFindings, p.ApprovalReason, pipeline.ResponseOptions{Origin: p.Origin, Coverage: p.Coverage, TestSimulatorLease: p.TestSimulatorLease})
 		if err != nil {
 			// A refused fix response is the caller's input to fix, not a
 			// transport failure: the gate is still parked. Report it as a

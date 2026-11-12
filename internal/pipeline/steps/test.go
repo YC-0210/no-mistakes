@@ -39,6 +39,12 @@ func (s *TestStep) Execute(sctx *pipeline.StepContext) (*pipeline.StepOutcome, e
 	if err := assertPipelineHeadContinuity(sctx, s.Name()); err != nil {
 		return nil, err
 	}
+	var native *simulatorTestAgent
+	var err error
+	sctx, native, err = simulatorTestContext(sctx)
+	if err != nil {
+		return nil, err
+	}
 	planSection, err := verificationPlanPromptSection(sctx)
 	if err != nil {
 		return nil, err
@@ -356,6 +362,7 @@ Rules:
 	if len(tested) > 0 {
 		findings.Tested = append(append([]string{}, tested...), findings.Tested...)
 	}
+	applySimulatorPrerequisite(&findings, native)
 	findings.TestedHeadSHA = sctx.Run.HeadSHA
 	findings.Items = append(baselineFindings, findings.Items...)
 	if baselineSummary != "" {
@@ -413,9 +420,14 @@ func runTestAnalyzer(sctx *pipeline.StepContext, prompt string) (Findings, error
 			))
 		}
 		timeout := testAgentTimeout(sctx)
+		purpose := "test-evidence"
+		if attempt > 1 {
+			purpose = "test-correction"
+		}
 		result, err := sctx.RunAgentBudget(sctx.Ctx, timeout, testAgentWorkingTimeout(sctx), errTestAgentTimeout, agent.RunOpts{
 			RequireCompletedChildren: true,
 			Prompt:                   current,
+			Purpose:                  purpose,
 			CWD:                      sctx.WorkDir,
 			JSONSchema:               testFindingsSchema,
 			OnChunk:                  sctx.LogChunk,

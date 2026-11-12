@@ -381,8 +381,9 @@ func TestNoMistakesBinary_WaitAndSlowDaemon(t *testing.T) {
 }
 
 type axiTimeoutOpts struct {
-	responded *atomic.Bool
-	subscribe ipc.StreamHandlerFunc
+	testSimulatorProbe func(context.Context, json.RawMessage) (interface{}, error)
+	responded          *atomic.Bool
+	subscribe          ipc.StreamHandlerFunc
 	// answer, when set, serves the daemon's answer-review-question call.
 	answer func() *ipc.AnswerReviewQuestionResult
 	// respond, when set, replaces the default respond handler so a test can
@@ -497,6 +498,9 @@ func newAxiTimeoutFixture(t *testing.T, opts axiTimeoutOpts) *axiTimeoutFixture 
 	}
 
 	srv := ipc.NewServer()
+	if opts.testSimulatorProbe != nil {
+		srv.Handle("probe_test_simulator_lease", opts.testSimulatorProbe)
+	}
 	srv.Handle(ipc.MethodHealth, func(context.Context, json.RawMessage) (interface{}, error) {
 		return &ipc.HealthResult{Status: "ok"}, nil
 	})
