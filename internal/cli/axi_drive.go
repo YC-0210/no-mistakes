@@ -1964,7 +1964,9 @@ func runAxiRespond(cmd *cobra.Command, ra respondArgs) error {
 			Version int `json:"version"`
 		}
 		probeErr := env.client.CallWithContext(driveCtx, ipc.MethodProbeTestSimulatorLease, nil, &supported, 0)
-		if isAxiWaitElapsed(ctx, driveCtx, probeErr) {
+		// The daemon honours the request deadline too, so a probe cut off by the
+		// wait can come back as an RPC error rather than a local deadline error.
+		if probeErr != nil && ctx.Err() == nil && deadlinePassed(driveCtx) {
 			return emitAxiWaitElapsedForRun(cmd, ra.wait, ra.runID, respondCmd+" --action fix")
 		}
 		if probeErr != nil || supported.Version != testsimulator.Version {
