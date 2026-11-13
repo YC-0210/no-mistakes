@@ -62,7 +62,7 @@ func TestPreflight_AuthorizedOwnedTargetRequiresRealDestinationRows(t *testing.T
 	if err := preflight(context.Background(), l, b, dir, "darwin", fixtureHash(l), nativeFixture(l, l.UDID, l.Name, available(l))); err != nil {
 		t.Fatal(err)
 	}
-	compat := strings.Replace(available(l), "Available", "Compatible", 1)
+	compat := "Destinations compatible with the \"App\" scheme:\n"+strings.SplitN(available(l), "\n", 2)[1]
 	if err := preflight(context.Background(), l, b, dir, "darwin", fixtureHash(l), nativeFixture(l, l.UDID, l.Name, compat)); err != nil {
 		t.Fatalf("compatible heading rejected: %v", err)
 	}
@@ -70,9 +70,10 @@ func TestPreflight_AuthorizedOwnedTargetRequiresRealDestinationRows(t *testing.T
 		"echo only":      "xcodebuild -destination id=" + l.UDID,
 		"unlabelled row": "{ platform:iOS Simulator, id:" + l.UDID + " }",
 		"foreign row":    strings.ReplaceAll(available(l), l.UDID, "00000000-0000-0000-0000-000000000000"),
-		"incompatible":   "Incompatible destinations for the \"App\" scheme:\n { platform:iOS Simulator, id:" + l.UDID + ", name:x }",
+		"incompatible":   "Destinations incompatible with the \"App\" scheme:\n { platform:iOS Simulator, id:" + l.UDID + ", name:x }",
 		"unknown section": "Other destinations for the \"App\" scheme:\n { platform:iOS Simulator, id:" + l.UDID + ", name:x }",
-		"uuid prefix":    "Compatible destinations for the \"App\" scheme:\n { platform:iOS Simulator, id:" + l.UDID + "0, name:x }",
+		"uuid prefix":    "Destinations compatible with the \"App\" scheme:\n { platform:iOS Simulator, id:" + l.UDID + "0, name:x }",
+		"compatible then incompatible target": "Destinations compatible with the \"App\" scheme:\n { platform:iOS Simulator, id:AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE, name:x }\nDestinations incompatible with the \"App\" scheme:\n { platform:iOS Simulator, id:" + l.UDID + ", name:x }",
 		"ineligible":     "Ineligible destinations for the \"App\" scheme:\n { platform:iOS Simulator, id:" + l.UDID + ", error:runtime missing }",
 	} {
 		t.Run(name, func(t *testing.T) {
