@@ -62,10 +62,17 @@ func TestPreflight_AuthorizedOwnedTargetRequiresRealDestinationRows(t *testing.T
 	if err := preflight(context.Background(), l, b, dir, "darwin", fixtureHash(l), nativeFixture(l, l.UDID, l.Name, available(l))); err != nil {
 		t.Fatal(err)
 	}
+	compat := strings.Replace(available(l), "Available", "Compatible", 1)
+	if err := preflight(context.Background(), l, b, dir, "darwin", fixtureHash(l), nativeFixture(l, l.UDID, l.Name, compat)); err != nil {
+		t.Fatalf("compatible heading rejected: %v", err)
+	}
 	for name, output := range map[string]string{
 		"echo only":      "xcodebuild -destination id=" + l.UDID,
 		"unlabelled row": "{ platform:iOS Simulator, id:" + l.UDID + " }",
 		"foreign row":    strings.ReplaceAll(available(l), l.UDID, "00000000-0000-0000-0000-000000000000"),
+		"incompatible":   "Incompatible destinations for the \"App\" scheme:\n { platform:iOS Simulator, id:" + l.UDID + ", name:x }",
+		"unknown section": "Other destinations for the \"App\" scheme:\n { platform:iOS Simulator, id:" + l.UDID + ", name:x }",
+		"uuid prefix":    "Compatible destinations for the \"App\" scheme:\n { platform:iOS Simulator, id:" + l.UDID + "0, name:x }",
 		"ineligible":     "Ineligible destinations for the \"App\" scheme:\n { platform:iOS Simulator, id:" + l.UDID + ", error:runtime missing }",
 	} {
 		t.Run(name, func(t *testing.T) {

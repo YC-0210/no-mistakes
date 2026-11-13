@@ -317,11 +317,12 @@ func destinationFound(output, udid string) bool {
 	available := false
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "Available destinations for ") {
+		if strings.HasPrefix(line, "Available destinations for ") || strings.HasPrefix(line, "Compatible destinations for ") {
 			available = true
 			continue
 		}
-		if strings.HasPrefix(line, "Ineligible destinations for ") {
+		if strings.Contains(line, " destinations for ") && strings.HasSuffix(line, ":") {
+			// Ineligible, Incompatible or any unrecognized section never counts.
 			available = false
 			continue
 		}
