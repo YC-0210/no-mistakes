@@ -94,7 +94,7 @@ exec /bin/ps "$@"
 				if readErr != nil {
 					t.Fatal(readErr)
 				}
-				want := "unix2003\n-g " + strconv.FormatInt(leader.Load(), 10) + " -o pgid=,stat=,pid=,command=\n"
+				want := "unix2003\n-g " + strconv.FormatInt(leader.Load(), 10) + " -o pgid=,stat=,pid=\n"
 				if !strings.Contains(string(args), want) {
 					t.Fatalf("inspection did not select the invocation's group: %q", args)
 				}

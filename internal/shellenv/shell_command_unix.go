@@ -247,7 +247,12 @@ func shellCommandGroupPS(ctx context.Context, pgid int) ([]byte, error) {
 		// processes and exhaust the completion window after our children
 		// already exited. Darwin can select the group before reading commands.
 		// Its legacy mode ignores -g, so explicitly select POSIX semantics.
-		args = []string{"-g", strconv.Itoa(pgid), "-o", "pgid=,stat=,pid=,command="}
+		// Completion needs numeric identity and state only. Retrieving even
+		// one member's command text can stall after that member has finished
+		// and exhaust the shared settle window. Labels remain optional in
+		// the parser; Darwin deliberately omits them rather than letting
+		// diagnostic enrichment decide whether completed work is accepted.
+		args = []string{"-g", strconv.Itoa(pgid), "-o", "pgid=,stat=,pid="}
 	}
 	probe := exec.CommandContext(ctx, "ps", args...)
 	if runtime.GOOS == "darwin" {

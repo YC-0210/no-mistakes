@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -407,8 +408,9 @@ func TestNativeAgents_RequireCompletedChildrenRefusesActiveOwnedChild(t *testing
 			// The refusal must name the surviving member so a wild report
 			// identifies which process refused to exit (issue #1614).
 			member := waitForPidFile(t, filepath.Join(dir, "owned.pid"), 5*time.Second)
-			if !strings.Contains(err.Error(), "pid "+strconv.Itoa(member)) || !strings.Contains(err.Error(), "(sleep 120)") {
-				t.Fatalf("Run error = %v, want member pid %d and its command named", err, member)
+			if !strings.Contains(err.Error(), "pid "+strconv.Itoa(member)) ||
+				runtime.GOOS != "darwin" && !strings.Contains(err.Error(), "(sleep 120)") {
+				t.Fatalf("Run error = %v, want member pid %d and a command label where available", err, member)
 			}
 		})
 	}

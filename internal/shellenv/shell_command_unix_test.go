@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -107,8 +108,8 @@ func TestShellCommandGroupActiveAcceptsMemberFinishingInsideWindow(t *testing.T)
 	if err != nil || !active {
 		t.Fatalf("single probe: active=%v detail=%q err=%v, want the finishing member reported", active, detail, err)
 	}
-	if !strings.Contains(detail, "(sleep 0.5)") {
-		t.Fatalf("single probe detail = %q, want the member's pid and command", detail)
+	if !strings.Contains(detail, "pid ") || runtime.GOOS != "darwin" && !strings.Contains(detail, "(sleep 0.5)") {
+		t.Fatalf("single probe detail = %q, want the member's pid and an available command label", detail)
 	}
 
 	started := time.Now()
@@ -144,8 +145,9 @@ func TestShellCommandGroupActiveRefusesMemberSurvivingWindow(t *testing.T) {
 	// Check identity independently of the bounded wait: a last ps probe
 	// may legitimately time out and refuse completion as unverified instead.
 	active, detail, err := ShellCommandGroupActive(cmd, 0)
-	if err != nil || !active || !strings.Contains(detail, "pid "+strconv.Itoa(memberPID)) || !strings.Contains(detail, "(sleep 30)") {
-		t.Fatalf("active=%v detail=%q err=%v, want pid %d and its command named", active, detail, err, memberPID)
+	if err != nil || !active || !strings.Contains(detail, "pid "+strconv.Itoa(memberPID)) ||
+		runtime.GOOS != "darwin" && !strings.Contains(detail, "(sleep 30)") {
+		t.Fatalf("active=%v detail=%q err=%v, want pid %d and an available command label", active, detail, err, memberPID)
 	}
 	const window = 400 * time.Millisecond
 	started := time.Now()
